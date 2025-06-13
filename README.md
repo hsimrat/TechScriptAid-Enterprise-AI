@@ -1,3 +1,9 @@
+## 📺 Video Tutorials
+
+- [Episode 1: Building an Enterprise API with Clean Architecture](https://youtu.be/YOUR-VIDEO-ID)
+  - Source code: [Episode 1 Branch](https://github.com/hsimrat/TechScriptAid-Enterprise-AI/tree/episode-1)
+
+
 # TechScriptAid Enterprise AI Development
 
 Welcome to the official code repository for the TechScriptAid YouTube channel! This repository contains all the code from our tutorial series on building production-ready enterprise applications with .NET and AI.
