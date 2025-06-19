@@ -8,15 +8,19 @@ namespace TechScriptAid.Core.Entities
 {
     public class Document : BaseEntity
     {
-        public string Title { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-        public string Category { get; set; } = string.Empty;
-        public DocumentStatus Status { get; set; } = DocumentStatus.Draft;
-        public string? AiSummary { get; set; }
-        public double? AiConfidenceScore { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string Content { get; set; }
+        //public string Category { get; set; } // Add this if needed
+        //public DocumentStatus Status { get; set; }
+        public DocumentType DocumentType { get; set; }
+        public string FileName { get; set; }
+        public long FileSize { get; set; }
+        public string ContentHash { get; set; }
         public List<string> Tags { get; set; } = new List<string>();
+        public Dictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>();
 
-        // Navigation properties
+        // Navigation property
         public ICollection<DocumentAnalysis> Analyses { get; set; } = new List<DocumentAnalysis>();
     }
 

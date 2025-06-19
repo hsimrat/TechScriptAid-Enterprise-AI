@@ -1,10 +1,14 @@
 ﻿using TechScriptAid.API.DTOs;
-using TechScriptAid.Core.Entities;
+using TechScriptAid.Core.Interfaces;
 
 namespace TechScriptAid.API.Services
 {
     public interface IDocumentService
     {
+
+
+
+
         Task<IEnumerable<DocumentDto>> GetDocumentsAsync(string? category = null, DocumentStatus? status = null);
         Task<DocumentDto?> GetDocumentByIdAsync(Guid id);
         Task<DocumentDto> CreateDocumentAsync(CreateDocumentDto createDto);

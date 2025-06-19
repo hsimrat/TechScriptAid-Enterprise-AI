@@ -19,6 +19,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TechScriptAid.API.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TechScriptAid.Core.Tests", "tests\TechScriptAid.Core.Tests\TechScriptAid.Core.Tests.csproj", "{F79B6209-AE4F-44B0-940D-082E7E63B484}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		ef-commands.ps1 = ef-commands.ps1
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -112,5 +117,8 @@ Global
 		{6380182C-2F97-487B-83EB-F139BDE1DE1F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{EC65DFE4-A497-446B-9943-6BC4AE0B523F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{F79B6209-AE4F-44B0-940D-082E7E63B484} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {13EE8059-BC4C-416D-900C-CB64A66AF276}
 	EndGlobalSection
 EndGlobal

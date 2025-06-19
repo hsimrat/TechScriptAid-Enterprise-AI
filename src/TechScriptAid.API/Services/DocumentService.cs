@@ -1,43 +1,48 @@
-﻿using TechScriptAid.API.DTOs;
+﻿using Microsoft.EntityFrameworkCore;
+using TechScriptAid.API.DTOs;
 using TechScriptAid.Core.Entities;
 using TechScriptAid.Core.Interfaces;
+using System.Linq;
+
+// Add this alias to resolve ambiguity
+using DocumentStatus = TechScriptAid.API.DTOs.DocumentStatus;
 
 namespace TechScriptAid.API.Services
 {
     public class DocumentService : IDocumentService
     {
+        private readonly IDocumentRepository _documentRepository;
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ILogger<DocumentService> _logger;
 
-        public DocumentService(IUnitOfWork unitOfWork, ILogger<DocumentService> logger)
+        public DocumentService(IDocumentRepository documentRepository, IUnitOfWork unitOfWork)
         {
+            _documentRepository = documentRepository;
             _unitOfWork = unitOfWork;
-            _logger = logger;
         }
 
         public async Task<IEnumerable<DocumentDto>> GetDocumentsAsync(string? category = null, DocumentStatus? status = null)
         {
-            IEnumerable<Document> documents;
+            // Get all documents first
+            var allDocuments = await _documentRepository.GetAllAsync();
 
+            var documents = allDocuments.ToList();
+
+            // Apply category filter if provided
             if (!string.IsNullOrEmpty(category))
             {
-                documents = await _unitOfWork.Documents.GetDocumentsByCategoryAsync(category);
-            }
-            else if (status.HasValue)
-            {
-                documents = await _unitOfWork.Documents.GetDocumentsByStatusAsync(status.Value);
-            }
-            else
-            {
-                documents = await _unitOfWork.Documents.GetAllAsync();
+                documents = documents.Where(d => d.Tags != null && d.Tags.Contains(category)).ToList();
             }
 
-            return documents.Select(MapToDto);
+            // Note: Status filtering would need to be implemented based on your business logic
+            // since Document entity doesn't have a Status property
+
+            // Map to DTOs
+            return documents.Select(MapToDto).ToList();
         }
 
         public async Task<DocumentDto?> GetDocumentByIdAsync(Guid id)
         {
-            var document = await _unitOfWork.Documents.GetByIdAsync(id);
+            var document = await _documentRepository.GetByIdAsync(id);
             return document != null ? MapToDto(document) : null;
         }
 
@@ -45,99 +50,102 @@ namespace TechScriptAid.API.Services
         {
             var document = new Document
             {
+                Id = Guid.NewGuid(),
                 Title = createDto.Title,
+                Description = createDto.Description ?? string.Empty,
                 Content = createDto.Content,
-                Category = createDto.Category,
-                Tags = createDto.Tags,
-                Status = DocumentStatus.Draft
+                DocumentType = createDto.DocumentType,
+                FileName = createDto.FileName,
+                FileSize = createDto.FileSize,
+                Tags = createDto.Tags ?? new List<string>(),
+                Metadata = createDto.Metadata ?? new Dictionary<string, string>(),
+                ContentHash = GenerateHash(createDto.Content),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                IsDeleted = false
             };
 
-            await _unitOfWork.Documents.AddAsync(document);
+            var created = await _documentRepository.AddAsync(document);
             await _unitOfWork.SaveChangesAsync();
 
-            _logger.LogInformation("Document created with ID: {DocumentId}", document.Id);
-
-            return MapToDto(document);
+            return MapToDto(created);
         }
 
         public async Task<bool> UpdateDocumentAsync(Guid id, UpdateDocumentDto updateDto)
         {
-            var document = await _unitOfWork.Documents.GetByIdAsync(id);
+            var document = await _documentRepository.GetByIdAsync(id);
             if (document == null)
-            {
                 return false;
+
+            // Update only provided fields
+            if (!string.IsNullOrEmpty(updateDto.Title))
+                document.Title = updateDto.Title;
+
+            if (!string.IsNullOrEmpty(updateDto.Description))
+                document.Description = updateDto.Description;
+
+            if (!string.IsNullOrEmpty(updateDto.Content))
+            {
+                document.Content = updateDto.Content;
+                document.ContentHash = GenerateHash(updateDto.Content);
             }
 
-            document.Title = updateDto.Title;
-            document.Content = updateDto.Content;
-            document.Category = updateDto.Category;
-            document.Status = updateDto.Status;
-            document.Tags = updateDto.Tags;
+            if (updateDto.DocumentType.HasValue)
+                document.DocumentType = updateDto.DocumentType.Value;
 
-            await _unitOfWork.Documents.UpdateAsync(document);
+            if (updateDto.Tags != null)
+                document.Tags = updateDto.Tags;
+
+            if (updateDto.Metadata != null)
+                document.Metadata = updateDto.Metadata;
+
+            document.UpdatedAt = DateTime.UtcNow;
+
+            _documentRepository.Update(document);
             await _unitOfWork.SaveChangesAsync();
-
-            _logger.LogInformation("Document updated: {DocumentId}", id);
 
             return true;
         }
 
         public async Task<bool> DeleteDocumentAsync(Guid id)
         {
-            var document = await _unitOfWork.Documents.GetByIdAsync(id);
+            var document = await _documentRepository.GetByIdAsync(id);
             if (document == null)
-            {
                 return false;
-            }
 
-            await _unitOfWork.Documents.DeleteAsync(document);
+            _documentRepository.Delete(document);
             await _unitOfWork.SaveChangesAsync();
-
             return true;
         }
 
         public async Task<IEnumerable<DocumentDto>> SearchDocumentsAsync(string searchTerm)
         {
-            var documents = await _unitOfWork.Documents.SearchDocumentsAsync(searchTerm);
-            return documents.Select(MapToDto);
+            var documents = await _documentRepository.SearchDocumentsAsync(searchTerm);
+            var documentList = documents.ToList();
+            return documentList.Select(MapToDto).ToList();
         }
 
         public async Task<DocumentAnalysisDto?> AnalyzeDocumentAsync(Guid documentId)
         {
-            var document = await _unitOfWork.Documents.GetByIdAsync(documentId);
+            var document = await _documentRepository.GetByIdAsync(documentId);
             if (document == null)
-            {
                 return null;
-            }
 
-            // TODO: In Episode 3, we'll integrate Azure OpenAI here
-            // For now, return mock analysis
-            var analysis = new DocumentAnalysisDto
+            // This will be implemented in Episode 3 with AI integration
+            await Task.Delay(100); // Simulate async operation
+
+            return new DocumentAnalysisDto
             {
-                DocumentId = document.Id,
-                DocumentTitle = document.Title,
-                Summary = $"This is a mock summary for {document.Title}. In the next episode, we'll integrate Azure OpenAI to generate real summaries.",
-                ConfidenceScore = 0.85,
-                KeyPhrases = new List<string> { "enterprise", "AI", "integration", ".NET" },
-                Sentiments = new Dictionary<string, double>
-                {
-                    { "positive", 0.7 },
-                    { "neutral", 0.2 },
-                    { "negative", 0.1 }
-                },
-                SuggestedTags = new List<string> { "technology", "tutorial" },
-                AnalyzedAt = DateTime.UtcNow
+                Id = Guid.NewGuid(),
+                DocumentId = documentId,
+                AnalysisType = AnalysisType.Summary,
+                Status = AnalysisStatus.Pending,
+                StartedAt = DateTime.UtcNow,
+                ModelUsed = "gpt-4",
+                Summary = "Analysis will be implemented in Episode 3",
+                Keywords = new List<string> { "placeholder", "analysis" },
+                Results = new Dictionary<string, object>()
             };
-
-            // Update document with analysis results
-            document.AiSummary = analysis.Summary;
-            document.AiConfidenceScore = analysis.ConfidenceScore;
-            document.Status = DocumentStatus.Analyzed;
-
-            await _unitOfWork.Documents.UpdateAsync(document);
-            await _unitOfWork.SaveChangesAsync();
-
-            return analysis;
         }
 
         private static DocumentDto MapToDto(Document document)
@@ -146,15 +154,25 @@ namespace TechScriptAid.API.Services
             {
                 Id = document.Id,
                 Title = document.Title,
+                Description = document.Description ?? string.Empty,
                 Content = document.Content,
-                Category = document.Category,
-                Status = document.Status.ToString(),
-                AiSummary = document.AiSummary,
-                AiConfidenceScore = document.AiConfidenceScore,
-                Tags = document.Tags,
+                DocumentType = document.DocumentType,
+                FileName = document.FileName,
+                FileSize = document.FileSize,
+                Tags = document.Tags ?? new List<string>(),
+                Metadata = document.Metadata ?? new Dictionary<string, string>(),
                 CreatedAt = document.CreatedAt,
-                UpdatedAt = document.UpdatedAt
+                UpdatedAt = document.UpdatedAt,
+                CreatedBy = document.CreatedBy ?? "System",
+                AnalysisCount = document.Analyses?.Count ?? 0
             };
+        }
+
+        private static string GenerateHash(string input)
+        {
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            byte[] bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
+            return Convert.ToBase64String(bytes);
         }
     }
 }

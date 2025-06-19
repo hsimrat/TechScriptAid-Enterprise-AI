@@ -6,64 +6,99 @@ namespace TechScriptAid.API.DTOs
     public class DocumentDto
     {
         public Guid Id { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-        public string Category { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
-        public string? AiSummary { get; set; }
-        public double? AiConfidenceScore { get; set; }
-        public List<string> Tags { get; set; } = new List<string>();
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string Content { get; set; }
+        public DocumentType DocumentType { get; set; }
+        public string FileName { get; set; }
+        public long FileSize { get; set; }
+        public List<string> Tags { get; set; }
+        public Dictionary<string, string> Metadata { get; set; }
         public DateTime CreatedAt { get; set; }
-        public DateTime? UpdatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+        public string CreatedBy { get; set; }
+        public int AnalysisCount { get; set; }
     }
 
     public class CreateDocumentDto
     {
-        [Required(ErrorMessage = "Title is required")]
-        [StringLength(200, MinimumLength = 3, ErrorMessage = "Title must be between 3 and 200 characters")]
-        public string Title { get; set; } = string.Empty;
+        [Required]
+        [StringLength(200)]
+        public string Title { get; set; }
 
-        [Required(ErrorMessage = "Content is required")]
-        [MinLength(10, ErrorMessage = "Content must be at least 10 characters")]
-        public string Content { get; set; } = string.Empty;
+        [StringLength(1000)]
+        public string Description { get; set; }
 
-        [Required(ErrorMessage = "Category is required")]
-        [StringLength(50, ErrorMessage = "Category cannot exceed 50 characters")]
-        public string Category { get; set; } = string.Empty;
+        [Required]
+        public string Content { get; set; }
+
+        [Required]
+        public DocumentType DocumentType { get; set; }
+
+        [Required]
+        [StringLength(255)]
+        public string FileName { get; set; }
+
+        [Required]
+        [Range(1, long.MaxValue)]
+        public long FileSize { get; set; }
 
         public List<string> Tags { get; set; } = new List<string>();
+
+        public Dictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>();
     }
 
     public class UpdateDocumentDto
     {
-        [Required(ErrorMessage = "Title is required")]
-        [StringLength(200, MinimumLength = 3, ErrorMessage = "Title must be between 3 and 200 characters")]
-        public string Title { get; set; } = string.Empty;
+        [StringLength(200)]
+        public string Title { get; set; }
 
-        [Required(ErrorMessage = "Content is required")]
-        [MinLength(10, ErrorMessage = "Content must be at least 10 characters")]
-        public string Content { get; set; } = string.Empty;
+        [StringLength(1000)]
+        public string Description { get; set; }
 
-        [Required(ErrorMessage = "Category is required")]
-        [StringLength(50, ErrorMessage = "Category cannot exceed 50 characters")]
-        public string Category { get; set; } = string.Empty;
+        public string Content { get; set; }
 
-        [Required(ErrorMessage = "Status is required")]
-        public DocumentStatus Status { get; set; }
+        public DocumentType? DocumentType { get; set; }
 
-        public List<string> Tags { get; set; } = new List<string>();
+        public List<string> Tags { get; set; }
+
+        public Dictionary<string, string> Metadata { get; set; }
     }
 
     public class DocumentAnalysisDto
     {
+        public Guid Id { get; set; }
         public Guid DocumentId { get; set; }
-        public string DocumentTitle { get; set; } = string.Empty;
-        public string Summary { get; set; } = string.Empty;
-        public double ConfidenceScore { get; set; }
-        public List<string> KeyPhrases { get; set; } = new List<string>();
-        public Dictionary<string, double> Sentiments { get; set; } = new Dictionary<string, double>();
-        public List<string> SuggestedTags { get; set; } = new List<string>();
-        public DateTime AnalyzedAt { get; set; }
+        public AnalysisType AnalysisType { get; set; }
+        public AnalysisStatus Status { get; set; }
+        public DateTime? StartedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public int? DurationInSeconds { get; set; }
+        public string ModelUsed { get; set; }
+        public decimal? Cost { get; set; }
+        public string Summary { get; set; }
+        public List<string> Keywords { get; set; }
+        public string Sentiment { get; set; }
+        public decimal? SentimentScore { get; set; }
+        public Dictionary<string, object> Results { get; set; }
+    }
+
+    public enum DocumentStatus
+    {
+        Active,
+        Archived,
+        Processing,
+        Failed
+    }
+    public class DocumentSearchResultDto
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public List<string> Tags { get; set; }
+        public DocumentType DocumentType { get; set; }
+        public int AnalysisCount { get; set; }
     }
 
 

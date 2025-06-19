@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using TechScriptAid.API.DTOs;
 using TechScriptAid.API.Services;
-using TechScriptAid.Core.Entities;
 
 
 

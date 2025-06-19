@@ -11,36 +11,33 @@ namespace TechScriptAid.Core.Entities
     public class DocumentAnalysis : BaseEntity
     {
         public Guid DocumentId { get; set; }
+        public Document Document { get; set; }
+
         public AnalysisType AnalysisType { get; set; }
-        public string Results { get; set; } = string.Empty; // JSON serialized results
-        public double ConfidenceScore { get; set; }
-        public string? ErrorMessage { get; set; }
-        public DateTime AnalyzedAt { get; set; }
+        public AnalysisStatus Status { get; set; }
 
-        // Navigation property
-        public Document Document { get; set; } = null!;
+        public DateTime? StartedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public int? DurationInSeconds { get; set; }
 
-        // Helper methods for Results serialization
-        public T? GetResults<T>() where T : class
-        {
-            if (string.IsNullOrEmpty(Results))
-                return null;
+        // AI-related properties
+        public string ModelUsed { get; set; }
+        public string ModelVersion { get; set; }
+        public string Prompt { get; set; }
+        public int? TokensUsed { get; set; }
+        public decimal? Cost { get; set; }
 
-            return JsonSerializer.Deserialize<T>(Results);
-        }
+        // Results
+        public Dictionary<string, object> Results { get; set; } = new Dictionary<string, object>();
+        public string Summary { get; set; }
+        public List<string> Keywords { get; set; } = new List<string>();
+        public string Sentiment { get; set; }
+        public decimal? SentimentScore { get; set; }
 
-        public void SetResults<T>(T results) where T : class
-        {
-            Results = JsonSerializer.Serialize(results);
-        }
+        // Error handling
+        public string ErrorMessage { get; set; }
+        public int RetryCount { get; set; }
     }
 
-    public enum AnalysisType
-    {
-        Summary,
-        Sentiment,
-        KeyPhraseExtraction,
-        Classification,
-        Translation
-    }
+
 }

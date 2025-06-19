@@ -1,171 +1,211 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using Serilog;
-using TechScriptAid.Core.Interfaces;
-using TechScriptAid.Infrastructure.Data;
-using TechScriptAid.Infrastructure.Repositories;
 using TechScriptAid.API.Middleware;
 using TechScriptAid.API.Services;
-using Microsoft.OpenApi.Models;
-using System.Reflection;
+using TechScriptAid.Core.Interfaces;
+using TechScriptAid.Infrastructure.Data;
+using TechScriptAid.Infrastructure.Data.Seeding;
+using TechScriptAid.Infrastructure.Repositories;
+using TechScriptAid.Infrastructure.Repositories.Decorators;
+using Microsoft.Extensions.Caching.Memory;
+
+var builder = WebApplication.CreateBuilder(args);
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
+    .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
     .Enrich.WithMachineName()
     .Enrich.WithEnvironmentName()
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: "logs/log-.txt",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30)
     .CreateLogger();
+
+builder.Host.UseSerilog();
+
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddAutoMapper(typeof(Program));
+// Configure Swagger with better documentation
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "TechScriptAid Enterprise AI API",
+        Version = "v1",
+        Description = "Enterprise-grade AI document processing API",
+        Contact = new OpenApiContact
+        {
+            Name = "TechScriptAid Team",
+            Email = "support@techscriptaid.com"
+        }
+    });
+
+    // Add XML comments if available
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+    {
+        c.IncludeXmlComments(xmlPath);
+    }
+});
+
+// Configure Entity Framework
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+{
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.MigrationsAssembly("TechScriptAid.Infrastructure");
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+        });
+
+    // Enable sensitive data logging in development
+    if (builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging();
+        options.EnableDetailedErrors();
+    }
+});
+
+// Add Memory Cache
+builder.Services.AddMemoryCache();
+
+// Configure repositories
+builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+// Add caching decorator for DocumentRepository
+//builder.Services.Decorate<IDocumentRepository>((inner, provider) =>
+//{
+//    var cache = provider.GetRequiredService<IMemoryCache>();
+//    return new CachedRepository<Document>(inner as IGenericRepository<Document>, cache);
+//});
+
+builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+
+// Add services
+builder.Services.AddScoped<IDocumentService, DocumentService>();
+
+// Add Data Seeder
+builder.Services.AddDataSeeder();
+
+// Add Health Checks
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>("database");
+
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowSpecificOrigins",
+        policy =>
+        {
+            policy.WithOrigins(
+                    "http://localhost:3000",
+                    "https://localhost:3000",
+                    "http://localhost:5173",
+                    "https://localhost:5173")
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+});
+
+// Add API Versioning
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new Microsoft.AspNetCore.Mvc.ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+});
+
+// Add Response Caching
+builder.Services.AddResponseCaching();
+
+// Add Compression
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
+
+var app = builder.Build();
+
+// Seed database
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        if (app.Environment.IsDevelopment())
+        {
+            // Using EnsureCreatedAsync instead of migrations
+            await context.Database.EnsureCreatedAsync();
+
+            // Temporarily skip seeding
+            // await scope.ServiceProvider.SeedDatabaseAsync();
+
+            Log.Information("Database created/verified successfully");
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "An error occurred during application startup");
+        throw;
+    }
+}
+
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "TechScriptAid Enterprise AI API V1");
+        c.RoutePrefix = string.Empty; // Swagger at root
+    });
+}
+else
+{
+    // Production error handling
+    app.UseExceptionHandler("/error");
+    app.UseHsts();
+}
+
+// Middleware pipeline
+app.UseHttpsRedirection();
+app.UseResponseCompression();
+app.UseResponseCaching();
+app.UseSerilogRequestLogging();
+app.UseCors("AllowSpecificOrigins");
+
+// Custom middleware
+app.UseMiddleware<ErrorHandlingMiddleware>();
+
+// Health checks endpoint
+app.MapHealthChecks("/health");
+
+app.UseAuthorization();
+app.MapControllers();
+
+// Add a welcome endpoint
+app.MapGet("/", () => Results.Redirect("/swagger"))
+    .ExcludeFromDescription();
 
 try
 {
     Log.Information("Starting TechScriptAid Enterprise AI API");
-
-    var builder = WebApplication.CreateBuilder(args);
-
-    // Add Serilog
-    builder.Host.UseSerilog();
-
-    // Add services to the container
-    builder.Services.AddControllers();
-    builder.Services.AddEndpointsApiExplorer();
-
-    // Configure Swagger with better documentation
-    builder.Services.AddSwaggerGen(c =>
-    {
-        c.SwaggerDoc("v1", new OpenApiInfo
-        {
-            Title = "TechScriptAid Enterprise AI API",
-            Version = "v1",
-            Description = "An enterprise-grade API demonstrating Clean Architecture with AI integration",
-            Contact = new OpenApiContact
-            {
-                Name = "Harsimrat Singh",
-                Email = "your-email@example.com",
-                Url = new Uri("https://github.com/hsimrat")
-            }
-        });
-
-        // Add JWT Authentication to Swagger
-        c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-        {
-            Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-            Name = "Authorization",
-            In = ParameterLocation.Header,
-            Type = SecuritySchemeType.ApiKey,
-            Scheme = "Bearer"
-        });
-
-        c.AddSecurityRequirement(new OpenApiSecurityRequirement
-        {
-            {
-                new OpenApiSecurityScheme
-                {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
-                },
-                Array.Empty<string>()
-            }
-        });
-
-        // Include XML comments
-        var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-        if (File.Exists(xmlPath))
-        {
-            c.IncludeXmlComments(xmlPath);
-        }
-    });
-
-    // Configure Database
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    {
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
-            sqlOptions =>
-            {
-                sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 5,
-                    maxRetryDelay: TimeSpan.FromSeconds(30),
-                    errorNumbersToAdd: null);
-            });
-    });
-
-    // Register repositories and services
-    builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-    builder.Services.AddScoped<IDocumentService, DocumentService>();
-
-    // Add CORS
-    builder.Services.AddCors(options =>
-    {
-        options.AddPolicy("AllowedOrigins",
-            policy =>
-            {
-                policy.WithOrigins(builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? new[] { "*" })
-                      .AllowAnyHeader()
-                      .AllowAnyMethod()
-                      .AllowCredentials();
-            });
-    });
-
-    // Add health checks
-    builder.Services.AddHealthChecks()
-        .AddDbContextCheck<ApplicationDbContext>();
-
-    // Add API versioning
-    builder.Services.AddApiVersioning(options =>
-    {
-        options.DefaultApiVersion = new Microsoft.AspNetCore.Mvc.ApiVersion(1, 0);
-        options.AssumeDefaultVersionWhenUnspecified = true;
-        options.ReportApiVersions = true;
-    });
-
-    // Add response caching
-    builder.Services.AddResponseCaching();
-
-    // Add memory cache
-    builder.Services.AddMemoryCache();
-
-    var app = builder.Build();
-
-    // Configure the HTTP request pipeline
-    app.UseSerilogRequestLogging();
-
-    // Global error handling
-    app.UseMiddleware<ErrorHandlingMiddleware>();
-
-    if (app.Environment.IsDevelopment())
-    {
-        app.UseSwagger();
-        app.UseSwaggerUI(c =>
-        {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "TechScriptAid API V1");
-            c.RoutePrefix = string.Empty; // Set Swagger UI at the app's root
-        });
-    }
-
-    app.UseHttpsRedirection();
-    app.UseCors("AllowedOrigins");
-    app.UseResponseCaching();
-    app.UseAuthentication();
-    app.UseAuthorization();
-
-    app.MapControllers();
-    app.MapHealthChecks("/health");
-
-    // Ensure database is created and migrations are applied
-    using (var scope = app.Services.CreateScope())
-    {
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        if (app.Environment.IsDevelopment())
-        {
-            await dbContext.Database.EnsureCreatedAsync();
-        }
-    }
-
-    await app.RunAsync();
+    app.Run();
 }
 catch (Exception ex)
 {
@@ -175,3 +215,6 @@ finally
 {
     Log.CloseAndFlush();
 }
+
+// Make the implicit Program class public so test projects can access it
+public partial class Program { }

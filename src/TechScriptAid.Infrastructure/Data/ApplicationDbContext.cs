@@ -1,19 +1,25 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection.Emit;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using System.Reflection;
 using TechScriptAid.Core.Entities;
 
 namespace TechScriptAid.Infrastructure.Data
 {
     public class ApplicationDbContext : DbContext
     {
+        private readonly string _currentUser;
+
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
         {
+            // In a real application, this would come from IHttpContextAccessor or similar
+            _currentUser = "System";
+        }
+
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, string currentUser)
+            : base(options)
+        {
+            _currentUser = currentUser ?? "System";
         }
 
         public DbSet<Document> Documents { get; set; }
@@ -23,86 +29,94 @@ namespace TechScriptAid.Infrastructure.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configure Document entity
-            modelBuilder.Entity<Document>(entity =>
+            // Apply configurations from assembly
+            modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+
+            // Global configurations
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
             {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
-                entity.Property(e => e.Category).IsRequired().HasMaxLength(50);
-                entity.Property(e => e.Status).HasConversion<string>();
+                // Configure decimal properties
+                var decimalProperties = entityType.ClrType.GetProperties()
+                    .Where(p => p.PropertyType == typeof(decimal) || p.PropertyType == typeof(decimal?));
 
-                // Store Tags as JSON
-                entity.Property(e => e.Tags)
-                    .HasConversion(
-                        v => string.Join(',', v),
-                        v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
-                    );
-
-                // Index for performance
-                entity.HasIndex(e => e.Category);
-                entity.HasIndex(e => e.Status);
-                entity.HasIndex(e => e.CreatedAt);
-
-                // Soft delete filter
-                entity.HasQueryFilter(e => !e.IsDeleted);
-            });
-
-            // Configure DocumentAnalysis entity
-            modelBuilder.Entity<DocumentAnalysis>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-
-                entity.HasOne(e => e.Document)
-                    .WithMany(d => d.Analyses)
-                    .HasForeignKey(e => e.DocumentId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.Property(e => e.AnalysisType).HasConversion<string>();
-
-                // Store Results as JSON
-                entity.Property(e => e.Results).HasColumnType("nvarchar(max)");
-
-                entity.HasQueryFilter(e => !e.IsDeleted);
-            });
-
-            // Seed initial data
-            SeedData(modelBuilder);
-        }
-
-        private void SeedData(ModelBuilder modelBuilder)
-        {
-            var documentId = Guid.NewGuid();
-            modelBuilder.Entity<Document>().HasData(
-                new Document
+                foreach (var property in decimalProperties)
                 {
-                    Id = documentId,
-                    Title = "Welcome to TechScriptAid Enterprise AI",
-                    Content = "This is a sample document demonstrating our enterprise application structure.",
-                    Category = "Tutorial",
-                    Status = DocumentStatus.Published,
-                    CreatedAt = DateTime.UtcNow,
-                    Tags = new List<string> { "welcome", "tutorial", "enterprise" }
+                    modelBuilder.Entity(entityType.ClrType)
+                        .Property(property.Name)
+                        .HasPrecision(18, 4);
                 }
-            );
+            }
         }
 
-        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        public override int SaveChanges()
         {
-            foreach (var entry in ChangeTracker.Entries<BaseEntity>())
+            OnBeforeSaving();
+            return base.SaveChanges();
+        }
+
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            OnBeforeSaving();
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+
+        private void OnBeforeSaving()
+        {
+            var entries = ChangeTracker.Entries()
+                .Where(e => e.Entity is BaseEntity &&
+                    (e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted));
+
+            var currentTime = DateTime.UtcNow;
+
+            foreach (var entry in entries)
             {
+                var entity = (BaseEntity)entry.Entity;
+
                 switch (entry.State)
                 {
                     case EntityState.Added:
-                        entry.Entity.Id = Guid.NewGuid();
-                        entry.Entity.CreatedAt = DateTime.UtcNow;
+                        entity.CreatedAt = currentTime;
+                        entity.CreatedBy = _currentUser;
+                        entity.UpdatedAt = currentTime;
+                        entity.UpdatedBy = _currentUser;
+                        entity.IsDeleted = false;
                         break;
+
                     case EntityState.Modified:
-                        entry.Entity.UpdatedAt = DateTime.UtcNow;
+                        entity.UpdatedAt = currentTime;
+                        entity.UpdatedBy = _currentUser;
+                        // Ensure CreatedAt/CreatedBy are not modified
+                        entry.Property(nameof(BaseEntity.CreatedAt)).IsModified = false;
+                        entry.Property(nameof(BaseEntity.CreatedBy)).IsModified = false;
+                        break;
+
+                    case EntityState.Deleted:
+                        // Implement soft delete
+                        entry.State = EntityState.Modified;
+                        entity.IsDeleted = true;
+                        entity.DeletedAt = currentTime;
+                        entity.DeletedBy = _currentUser;
+                        entity.UpdatedAt = currentTime;
+                        entity.UpdatedBy = _currentUser;
                         break;
                 }
             }
+        }
 
-            return base.SaveChangesAsync(cancellationToken);
+        // Method to permanently delete soft-deleted records (use with caution)
+        public void PermanentlyDelete<T>(T entity) where T : BaseEntity
+        {
+            base.Remove(entity);
+        }
+
+        // Method to restore soft-deleted records
+        public void Restore<T>(T entity) where T : BaseEntity
+        {
+            entity.IsDeleted = false;
+            entity.DeletedAt = null;
+            entity.DeletedBy = null;
+            entity.UpdatedAt = DateTime.UtcNow;
+            entity.UpdatedBy = _currentUser;
         }
     }
 }
