@@ -36,10 +36,12 @@ TechScriptAid.EnterpriseAI/
 - Azure Account (free tier works)
 - Git
 
-### Running the Application
-```bash
-# Clone the repository
+Quick Start
+bash# Clone the repository
 git clone https://github.com/hsimrat/TechScriptAid-Enterprise-AI.git
+
+# Checkout Episode 2 branch
+git checkout episode-2-ef-core-migrations
 
 # Navigate to the project
 cd TechScriptAid-Enterprise-AI
@@ -47,13 +49,18 @@ cd TechScriptAid-Enterprise-AI
 # Restore dependencies
 dotnet restore
 
+# Update database (Episode 2)
+dotnet ef database update --project src/TechScriptAid.Infrastructure --startup-project src/TechScriptAid.API
+
 # Run the API
 dotnet run --project src/TechScriptAid.API
 📺 Episodes
 
-Episode 001 - Setting Up Enterprise Development Environment
-Episode 002 - Building Your First Clean Architecture API (Coming Soon)
-Episode 003 - Adding Azure OpenAI Integration (Coming Soon)
+✅ Episode 001 - Setting Up Enterprise Development Environment
+🆕 Episode 002 - Entity Framework Core Migrations & Advanced Data Operations
+🔜 Episode 003 - Adding Azure OpenAI Integration (Coming Soon)
+🔜 Episode 004 - Implementing CQRS Pattern (Coming Soon)
+
 
 🛠️ Technologies Used
 
@@ -64,13 +71,35 @@ Database: SQL Server, Entity Framework Core
 Testing: xUnit, Moq, FluentAssertions
 CI/CD: GitHub Actions, Azure DevOps
 
+🔧 Episode 2: What You'll Learn
+In this episode, we cover:
+
+Setting up Entity Framework Core in Clean Architecture
+Creating and managing database migrations
+Implementing Repository and Unit of Work patterns
+Advanced querying techniques
+Database seeding and initialization
+Handling database relationships
+Performance optimization tips
+
+Key Commands from Episode 2
+powershell# Add a new migration
+dotnet ef migrations add InitialCreate --project src/TechScriptAid.Infrastructure --startup-project src/TechScriptAid.API
+
+# Update database
+dotnet ef database update --project src/TechScriptAid.Infrastructure --startup-project src/TechScriptAid.API
+
+# Remove last migration
+dotnet ef migrations remove --project src/TechScriptAid.Infrastructure --startup-project src/TechScriptAid.API
+
+# Generate SQL script
+dotnet ef migrations script --project src/TechScriptAid.Infrastructure --startup-project src/Tech
+
 📧 Connect
 
 YouTube: TechScriptAid Channel
 GitHub: @hsimrat
-LinkedIn: [Your LinkedIn Profile]
+LinkedIn: https://www.linkedin.com/in/harsimrat
 
-📝 License
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ⭐ If you find this helpful, please star the repository and subscribe to the channel!
