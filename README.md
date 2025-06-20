@@ -2,6 +2,8 @@
 
 - [Episode 1: Building an Enterprise API with Clean Architecture](https://youtu.be/YOUR-VIDEO-ID)
   - Source code: [Episode 1 Branch](https://github.com/hsimrat/TechScriptAid-Enterprise-AI/tree/episode-1)
+  - Source code: [Episode 2 Branch] https://github.com/hsimrat/TechScriptAid-Enterprise-AI/tree/episode-2-ef-core-migrations
+    
 
 
 # TechScriptAid Enterprise AI Development
